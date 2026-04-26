@@ -140,8 +140,8 @@ const server = Bun.serve({
           try {
             const reply = await askSuzuki(userId, userText);
             await lineReply(replyToken, reply);
-          } catch (err) {
-            console.error("Error:", err);
+          } catch (err: any) {
+            console.error("Error:", err?.message ?? err, err?.status, err?.error);
             await lineReply(replyToken, "すみません、少し問題が起きました。もう一度試してみてください！（抱歉，請再試一次！）");
           }
         }
