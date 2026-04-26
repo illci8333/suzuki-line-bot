@@ -163,6 +163,24 @@ Q3. ___（中文）用日文怎麼說？
   return result.choices[0].message.content ?? "今天的考題出不來，明天繼續！";
 }
 
+// ── 下載 LINE 音檔並轉文字 ───────────────────────────────
+async function transcribeLineAudio(messageId: string): Promise<string> {
+  const res = await fetch(`https://api-data.line.me/v2/bot/message/${messageId}/content`, {
+    headers: { Authorization: `Bearer ${LINE_ACCESS_TOKEN}` },
+  });
+  if (!res.ok) throw new Error(`Failed to download audio: ${res.status}`);
+
+  const buffer = await res.arrayBuffer();
+  const audioFile = new File([buffer], "audio.m4a", { type: "audio/m4a" });
+
+  const transcription = await groq.audio.transcriptions.create({
+    file: audioFile,
+    model: "whisper-large-v3-turbo",
+  });
+
+  return transcription.text;
+}
+
 // ── LINE reply（回覆訊息）────────────────────────────────
 async function lineReply(replyToken: string, text: string) {
   const truncated = text.length > 4900 ? text.slice(0, 4900) + "…" : text;
@@ -278,21 +296,30 @@ const server = Bun.serve({
 
       (async () => {
         for (const event of payload.events ?? []) {
-          if (event.type !== "message" || event.message.type !== "text") continue;
+          if (event.type !== "message") continue;
+          const msgType: string = event.message.type;
+          if (msgType !== "text" && msgType !== "audio") continue;
 
           const userId: string = event.source.userId ?? event.source.groupId ?? "unknown";
-          const userText: string = event.message.text;
           const replyToken: string = event.replyToken;
 
-          console.log(`[${userId}] ${userText}`);
-
-          // 隱藏指令：取得自己的 LINE User ID
-          if (userText === "!我的ID") {
-            await lineReply(replyToken, `你的 LINE User ID：\n${userId}`);
-            continue;
-          }
-
           try {
+            let userText: string;
+
+            if (msgType === "audio") {
+              console.log(`[${userId}] (audio message)`);
+              userText = await transcribeLineAudio(event.message.id);
+              console.log(`[${userId}] transcribed: ${userText}`);
+            } else {
+              userText = event.message.text;
+              console.log(`[${userId}] ${userText}`);
+
+              if (userText === "!我的ID") {
+                await lineReply(replyToken, `你的 LINE User ID：\n${userId}`);
+                continue;
+              }
+            }
+
             const reply = await askAimyon(userId, userText);
             await lineReply(replyToken, reply);
           } catch (err: any) {
