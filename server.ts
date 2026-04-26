@@ -214,7 +214,11 @@ async function linePush(userId: string, text: string) {
     }),
   });
   if (!res.ok) console.error("LINE push error:", res.status, await res.text());
-  else console.log(`Daily vocab pushed to ${userId}`);
+  else {
+    console.log(`Pushed to ${userId}`);
+    // 把推播內容存進對話記憶，這樣用戶回覆時 bot 知道上下文
+    addToHistory(userId, "assistant", truncated);
+  }
 }
 
 // ── 排程（台灣時間 UTC+8）────────────────────────────────
